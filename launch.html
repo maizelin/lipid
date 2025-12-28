@@ -1,64 +1,36 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>啟動中 - SMART Statin CDS v2.0</title>
-  <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      color: #2c3e50;
-    }
-    .container {
-      text-align: center;
-      padding: 40px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-      max-width: 500px;
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 20px;
-    }
-    .spinner {
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #3498db;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      animation: spin 1s linear infinite;
-      margin: 30px auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    p {
-      font-size: 16px;
-      opacity: 0.8;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>SMART Statin CDS v2.0 - Launch</title>
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>🩺 SMART Statin CDS v2.0</h1>
-    <p>正在從電子病歷系統啟動應用程式...<br>請稍候，正在進行安全授權</p>
-    <div class="spinner"></div>
-    <p><small>若長時間無反應，請確認 EHR 是否正確傳入 launch 參數</small></p>
-  </div>
+    <script>
+        // 生成高entropy state以防CSRF
+        const state = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        sessionStorage.setItem('oauthState', state);  // 儲存state以供驗證
 
-  <script type="text/javascript">
-    FHIR.oauth2.authorize({
-      // 請替換成你在 EHR 註冊時取得的 Client ID（如果是 public client，可留空或填入註冊的 ID）
-      clientId: "your-smart-app-client-id",  
-
-      // 需要的權限範圍（根據你的應用需求調整）
-      // patient/Patient.read + patient/Observation.read 足以讀取病人資料與 LDL-C 檢驗
-      scope: "launch patient/Patient.read patient
+        // 生成PKCE code_verifier與code_challenge
+        function base64URLEncode(str) {
+            return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+        const verifier = base64URLEncode(crypto.getRandomValues(new Uint8Array(32)));
+        sessionStorage.setItem('code_verifier', verifier);
+        crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+            .then(hash => {
+                const challenge = base64URLEncode(String.fromCharCode(...new Uint8Array(hash)));
+                FHIR.oauth2.authorize({
+                    clientId: "statin-cdss-app",
+                    scope: "launch patient/*.read user/Observation.rs openid fhirUser",  // 擴充scope以支援Observation search/read
+                    redirectUri: "index.html",
+                    iss: "https://thas.mohw.gov.tw/v/r4/fhir",  // 指定THAS伺服器iss（standalone模式）
+                    state: state,  // 防CSRF
+                    codeChallenge: challenge,
+                    codeChallengeMethod: "S256"  // PKCE
+                });
+            });
+    </script>
+    <p>正在重新導向至授權頁面...</p>
+</body>
+</html>
